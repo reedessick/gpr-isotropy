@@ -19,11 +19,11 @@ class Likelihood(object):
         self._npix = len(maps[0])
         self._nside = hp.npix2nside(self._npix)
         self._sum = np.zeros(self._npix, dtype=float)
-        self._cov = np.zeros((self._npix, self._npix), dtype=float)
+        self._out = np.zeros((self._npix, self._npix), dtype=float)
         for m in maps:
             assert len(m)==self._npix, 'inconsistent shapes for maps!'
             self._sum += m
-            self._cov += np.outer(m, m)
+            self._out += np.outer(m, m)
        
         assert len(exposure)==self._npix, 'inconsistent shape for exposure!'
         self._exposure = exposure
@@ -54,5 +54,15 @@ def Eps(Likelihood):
     importance sampling to marginalize over Ro
     if Ro_samples is not supplied, we'll sample some from loglike_Ro
     """
+    def __init__(self, maps, exposure):
+        self._likelihood_Ro_eps = Ro_Eps(maps, exposure)
+        self._npix = self._likelihood_Ro_eps._npix
+        self._nside = self._likelihood_Ro_eps._nside
+        self._sum = self._likelihood_Ro_eps._sum
+        self._out = self._likelihood_Ro_eps._out
+        self._exposure = self._likelihood_Ro_eps._exposure
+
     def __call__(self, eps, Ro_samples):
-        raise NotImplementedError
+        ans = np.ans([self._likelihood_Ro_eps(Ro, eps) for Ro in Ro_samples])
+        m = np.max(ans)
+        return np.log(np.sum(np.exp(ans-m))) + m - np.log(len(Ro_samples))
