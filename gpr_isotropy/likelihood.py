@@ -8,6 +8,10 @@ import numpy as np
 
 #-------------------------------------------------
 
+TWOPI = 2*np.pi
+
+#-------------------------------------------------
+
 class Likelihood(object):
     """
     general class representing a likelihood
@@ -49,7 +53,13 @@ class Ro(Likelihood):
     analytic marginalization over eps
     """
     def __cal__(self, Ro, kernel):
-        raise NotImplementedError('')
+        gamma = kernel.icov + np.outer(Ro, Ro)*self._out
+        sign, logdet = np.slogdet(gamma)
+        assert sign>0, 'unphysical covariance matrix!'
+
+        raise NotImplementedError
+
+        return -np.sum(Ro*self._exposure) + self._num*np.log(np.sum(Ro*self._exposure)) + 0.5*self._npix*np.log(TWOPI)
 
 def Eps(Ro_Eps):
     """
