@@ -23,7 +23,7 @@ class Posterior(object):
     _likelihood_function = likelihood.Likelihood ### does this mean I can't pickle this?
 
     def __init__(self, maps, exposure, kernel, rprior):
-        self._likelihood = self._likelihood_function.Likelihood(maps, exposure)
+        self._likelihood = self._likelihood_function(maps, exposure)
         self._kernel = kernel
         self._prior = rprior
 
