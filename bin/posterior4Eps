@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+
+__usage__ = "posterior4Eps [--options] exposure.fits.gz skymap.fits.gz [skymap.fits.gz skymap.fits.gz ...]"
+__doc__ = "a simple script that samples from the posterior for Eps given some priors"
+__author__ = "reed.essick@ligo.org"
+
+#-------------------------------------------------
+
+import h5py
+import emcee
+
+from optparse import OptionParser
+
+### non-standard libraries
+from gpr_istorpy import prior
+from gpr_istorpy import likelihood
+from gpr_istorpy import posterior
+
+#-------------------------------------------------
+
+DEFAULT_OUTPUT_PATH = 'posterior4Eps.hdf5'
+
+#-------------------------------------------------
+
+parser = OptionParser(usage=__usage__, description=__doc__)
+
+parser.add_option('-v', '--verbose', default=False, action='store_true')
+
+parser.add_option('-o', '--output-path', default=DEFAULT_OUTPUT_PATH, type='string',
+    help='DEFAULT='+DEFAULT_OUTPUT_PATH)
+
+opts, args = parser.parse_args()
+
+#-------------------------------------------------
+
+raise NotImplementedError, '''\
+load in exposure and maps
+set up objects:
+    prior.Kernel
+    prior.Rprior
+    posterior.Ro
+sample and write to disk'''
