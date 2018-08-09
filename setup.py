@@ -16,6 +16,9 @@ setup(
     description = __doc__,
     liscence = 'MIT License',
     scripts = [
+        'bin/posterior4RoEps',
+        'bin/posterior4Ro',
+        'bin/posterior4Eps',
     ],
     packages = [
         'gpr_isotropy',

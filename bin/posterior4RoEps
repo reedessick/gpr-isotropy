@@ -12,9 +12,9 @@ import emcee
 from optparse import OptionParser
 
 ### non-standard libraries
-from gpr_istorpy import prior
-from gpr_istorpy import likelihood
-from gpr_istorpy import posterior
+from gpr_isotropy import prior
+from gpr_isotropy import likelihood
+from gpr_isotropy import posterior
 
 #-------------------------------------------------
 
