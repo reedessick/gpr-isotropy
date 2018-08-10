@@ -25,7 +25,7 @@ class Likelihood(object):
         ### set up the derived products we need from the maps
         self._maps = maps
         self._num = len(maps)
-        self._sum = np.zeros(self._npix, dtype=float)
+        self._sum = -exposure
         self._out = np.zeros((self._npix, self._npix), dtype=float)
         for m in maps:
             assert len(m)==self._npix, 'inconsistent shapes for maps!'
@@ -41,10 +41,22 @@ class Ro_Eps(Likelihood):
     """
     likelihood for (Ro, eps) given maps, exposure
     """
+    def eps_fisher(self, Ro):
+        """
+        return the fisher matrix for eps|Ro
+        """
+        return np.transpose(self._out*Ro)*Ro ### this should do what I want...
+
+    def eps_mean(self, Ro):
+        """
+        return the mean value of eps|Ro
+        """
+        return np.sum(np.linalg.inv(self.eps_fisher(Ro))*Ro*self._sum, axis=1)
+
     def __call__(self, Ro, eps):
         return -np.sum(Ro*self._exposure) + self._num*np.log(np.sum(Ro*self._exposure)) \
-            + np.sum(eps*Ro*(-self._exposure+self._sum)) \
-            -0.5*np.sum(eps*Ro*np.sum(self._out*Ro*eps, axis=1))
+            + np.sum(eps*Ro*(-self._sum)) \
+            -0.5*np.sum(eps*np.sum(self.eps_fisher(Ro)*eps, axis=1))
 
 class Ro(Likelihood):
     """
@@ -54,12 +66,14 @@ class Ro(Likelihood):
     """
     def __cal__(self, Ro, kernel):
         gamma = kernel.icov + np.outer(Ro, Ro)*self._out
-        sign, logdet = np.slogdet(gamma)
+        sign, logdet_gamma = np.slogdet(gamma)
         assert sign>0, 'unphysical covariance matrix!'
+        igamma = np.linalg.inv(gamma)
 
-        raise NotImplementedError
-
-        return -np.sum(Ro*self._exposure) + self._num*np.log(np.sum(Ro*self._exposure)) + 0.5*self._npix*np.log(TWOPI)
+        ### analytic marginalization over eps
+        return -np.sum(Ro*self._exposure) + self._num*np.log(np.sum(Ro*self._exposure)) \
+            + 0.5*np.sum(Ro*(self._sum)*np.sum(igamma*Ro*self._sum, axis=1)) \
+            - 0.5*logdet_gamma - 0.5*kernel.logdet_cov
 
 def Eps(Ro_Eps):
     """

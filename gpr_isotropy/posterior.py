@@ -45,6 +45,19 @@ class Posterior(object):
 class Ro_Eps(Posterior):
     _likelihood_function = likelihood.Ro_Eps
 
+    def eps_fisher(self, Ro):
+        """
+        covariance for eps|Ro a posteriori (includes effect of kernel)
+        """
+        return self._likelihood.eps_fisher(Ro) + self._kernel._icov
+
+    def eps_mean(self, Ro):
+        """
+        mean for eps|Ro a posteriori (includes effect of kernel)
+        """
+        igamma = np.linalg.inv(self.eps_fisher(Ro))
+        return np.sum(igamma*Ro*self._likelihood._sum, axis=1)
+
 class Ro(Posterior):
     """
     log prob(Ro|maps, exposure, kernel, Rprior)
@@ -54,7 +67,7 @@ class Ro(Posterior):
     def __call__(self, Ro):
         return self.likelihood(Ro, self._kernel) + self._rprior(Ro)
 
-class Eps(Posterior):
+class Eps(Ro_Eps):
     """
     log prob(eps|maps, exposure, kernel, Rprior)
 

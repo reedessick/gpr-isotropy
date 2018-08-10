@@ -9,6 +9,7 @@ import healpy as hp
 #-------------------------------------------------
 
 TWOPI = 2*np.pi
+LOG2PI = np.log(TWOPI)
 
 #-------------------------------------------------
 
@@ -131,7 +132,7 @@ class Kernel(object):
         """
         evaluate the inner product of the kernal with some vector
         """
-        return np.sum(eps*np.sum(self._icov*eps, axis=1))
+        return -0.5*np.sum(eps*np.sum(self._icov*eps, axis=1)) - 0.5*(self._npix*LOG2PI - self._logdet_cov)
 
 class WhiteKernel(Kernel):
     """
