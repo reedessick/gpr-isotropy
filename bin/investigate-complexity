@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-__usage__ = "investigate-complexity [--options] config.ini"
+__usage__ = "investigate-complexity [--options]"
 __doc__ = """\
 a simple script that investigates the complexity (and the scaling thereof) of different models.
 We place particular emphasis on how many events we need to meaningfully constrain different models."""
@@ -12,40 +12,134 @@ import os
 from optparse import OptionParser
 
 import numpy as np
+import healpy as hp
 
-### non-standard libraries
-from gpr_isotropy import configparser
-from gpr_isotropy import sample
+import matplotlib
+matplotlib.use("Agg")
+from matplotlib import pyplot as plt
 
 #-------------------------------------------------
 
-DEFAULT_NSIDE = sample.DEFAULT_NSIDE
-DEFAULT_NEVENT_RANGE = (1, 10000)
+DEFAULT_SIZE = 50
+DEFAULT_NEVENT_RANGE = (1, 1000, 10)
+DEFAULT_NTRIALS = 100
+
+MODES = {
+    'random':lambda size: np.random.rand(size),
+    'gaussian': lambda size, std: np.exp(-0.5*(np.linspace(0,1,size)-np.random.rand())**2/std**2)/(2*np.pi*std**2)**0.5,
+} ### FIXME: add skymaps as an option?
+KNOWN_MODES = MODES.keys()
+DEFAULT_MODE = KNOWN_MODES[0]
+
+DEFAULT_STD = 1e-1
 
 #-------------------------------------------------
 
 parser = OptionParser(usage=__usage__, description=__doc__)
 
 parser.add_option('-v', '--verbose', default=False, action='store_true')
+parser.add_option('-V', '--Verbose', default=False, action='store_true')
 
-parser.add_option('-n', '--nside', default=DEFAULT_NSIDE, type='int',
-    help='DEFAULT=%d'%DEFAULT_NSIDE)
+parser.add_option('-n', '--size', default=DEFAULT_SIZE, type='int',
+    help='DEFAULT=%d'%DEFAULT_SIZE)
 
-parser.add_option('-N', '--Nevent-range', default=DEFAULT_NEVENT_RANGE, nargs=2, type='int',
+parser.add_option('-N', '--Nevent-range', default=DEFAULT_NEVENT_RANGE, nargs=3, type='int',
     help='We investigate the behavior of the eigenvalues within this range of Nevent. \
-DEFAULT=%d %d'%DEFAULT_NEVENT_RANGE)
-parser.add_option('-m', '--Ntrials', default=sample.DEFAULT_NUM_SAMPLES, type='int',
+To investigate every 3rd integer between 1 and 200, one should specify `--Nevent-range 1 200 3`. \
+DEFAULT=%d %d %d'%DEFAULT_NEVENT_RANGE)
+parser.add_option('-m', '--Ntrials', default=DEFAULT_NTRIALS, type='int',
     help='The number of trials performed for each Nevent. \
-DEFAULT=%d'%sample.DEFAULT_NUM_SAMPLES)
+DEFAULT=%d'%DEFAULT_NTRIALS)
+
+parser.add_option('--mode', default=DEFAULT_MODE, type='string', 
+    help='must be one of %s. \
+DEFAULT=%s'%(', '.join(KNOWN_MODES), DEFAULT_MODE))
+parser.add_option('--gaussian-std', default=DEFAULT_STD, type='float',
+    help='standard deviation of Gaussian used iff --mode=gaussian. \
+DEFAULT=%.3f'%DEFAULT_STD)
+
+parser.add_option('-o', '--output-dir', default='.', type='string')
+parser.add_option('-t', '--tag', default='', type='string')
 
 opts, args = parser.parse_args()
-assert len(args) == 1, 'please supply exactly 1 input argument\n%s'%__usage__
-config = args[0]
+assert len(args) == 0, 'please supply exactly 0 input argument\n%s'%__usage__
+assert opts.mode in KNOWN_MODES, '--mode=%s not understood. Must be one of %s'%(opts.mode, ', '.join(KNOWN_MODES))
+
+if not os.path.exists(opts.output_dir):
+    os.makedirs(opts.output_dir)
+
+if opts.tag:
+    opts.tag = "_"+opts.tag
+
+opts.verbose |= opts.Verbose
 
 #-------------------------------------------------
 
-raise NotImplementedError, '''\
-generate random vectors of specified size
-compute eigenvalues for eps_fisher from likelihood, posterior, etc
-do this repeatedly and build up distributions of how the eigenvalues behave as a function of number of events
-plot? write observed distributions to disk and then plot with a separate script?'''
+### set up arguments for simulation functions
+draw = MODES[opts.mode]
+if opts.mode=='random':
+    args = (opts.size,)
+
+elif opts.mode=='gaussian':
+    args = (opts.size, opts.gaussian_std)
+
+else:
+    raise ValueError('--mode=%s not understood'%opts.mode)
+
+#-------------------------------------------------
+
+### stack simulations and compute ranks
+fish = np.zeros((opts.size, opts.size), dtype=float) ### allocate memory for the big array
+
+summary = []
+for nevent in xrange(*opts.Nevent_range):
+    if opts.verbose:
+        print('simulating %d events'%nevent)
+
+    ranks = []
+    for trial in xrange(opts.Ntrials):
+        if opts.Verbose:
+            print('    trial %d / %d'%(trial, opts.Ntrials))
+
+        fish[...] = 0.
+        for event in xrange(nevent):
+            p = draw(*args)
+            fish += np.outer(p, p)
+
+        ranks.append(np.linalg.matrix_rank(fish))
+
+    summary.append(ranks)
+
+### print summary information about ranks and plot a figure
+if opts.verbose:
+    print('plotting')
+
+fig = plt.figure()
+ax = fig.gca()
+
+ax.boxplot(summary, positions=range(*opts.Nevent_range))
+
+# decorate
+ax.set_xlabel('number of events')
+ax.set_ylabel('rank')
+
+# add expected assymptotes...
+if opts.mode=='random':
+    ax.plot(ax.get_xlim(), [opts.size]*2, 'k--') ### add line for the size of the array
+
+elif opts.mode=='gaussian':
+#    ax.plot(ax.get_xlim(), [opts.size*opts.gaussian_std]*2, 'k--')
+    pass ### I don't understand the scaling here, so it's not clear how to predict it...
+
+else:
+    raise ValueError('--mode=%s not understood'%opts.mode)
+
+ymin, ymax = ax.get_ylim()
+ax.set_ylim(ymin=ymin/1.1, ymax=ymax*1.1)
+
+# save
+figname = '%s/investigate-complexity%s.png'%(opts.output_dir, opts.tag)
+if opts.verbose:
+    print('saving: '+figname)
+fig.savefig(figname)
+plt.close(fig)
