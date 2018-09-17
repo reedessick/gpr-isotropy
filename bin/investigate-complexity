@@ -14,6 +14,8 @@ from optparse import OptionParser
 import numpy as np
 import healpy as hp
 
+from scipy.stats import beta, vonmises
+
 import matplotlib
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
@@ -24,14 +26,35 @@ DEFAULT_SIZE = 50
 DEFAULT_NEVENT_RANGE = (1, 1000, 10)
 DEFAULT_NTRIALS = 100
 
+DEFAULT_STD = 1e-1
+
+def draw_random(size):
+    p = np.random.rand(size)
+    return p/np.sum(p)
+
+def draw_gauss(size, std=DEFAULT_STD):
+    p = np.exp(-0.5*(np.linspace(0,1,size)-np.random.rand())**2/std**2)/(2*np.pi*std**2)**0.5
+    return p/np.sum(p)
+
+def draw_vonmises(size, std=DEFAULT_STD):
+    p = vonmises.pdf(np.linspace(-np.pi,np.pi,size), kappa=1./std**2, loc=(np.random.rand()-0.5)*np.pi)
+    return p/np.sum(p)
+
+def draw_beta(size, **kwargs):
+    raise NotImplementedError
+
+def draw_skymap(size, **kwargs):
+    raise NotImplementedError
+
 MODES = {
-    'random':lambda size: np.random.rand(size),
-    'gaussian': lambda size, std: np.exp(-0.5*(np.linspace(0,1,size)-np.random.rand())**2/std**2)/(2*np.pi*std**2)**0.5,
-} ### FIXME: add skymaps as an option?
+    'random':draw_random,
+    'gaussian':draw_gauss,
+    'vonmises':draw_vonmises,
+    'beta':draw_beta,
+    'skymap':draw_skymap,
+}
 KNOWN_MODES = MODES.keys()
 DEFAULT_MODE = KNOWN_MODES[0]
-
-DEFAULT_STD = 1e-1
 
 #-------------------------------------------------
 
@@ -83,6 +106,9 @@ if opts.mode=='random':
 elif opts.mode=='gaussian':
     args = (opts.size, opts.gaussian_std)
 
+elif opts.mode=='vonmises':
+    args = (opts.size, opts.gaussian_std)
+
 else:
     raise ValueError('--mode=%s not understood'%opts.mode)
 
@@ -118,6 +144,8 @@ fig = plt.figure()
 ax = fig.gca()
 
 ax.boxplot(summary, positions=range(*opts.Nevent_range))
+for ranks, x in zip(summary, range(*opts.Nevent_range)):
+    ax.plot([x]*len(ranks), ranks, marker='o', markersize=4, markeredgecolor='k', markerfacecolor='none', alpha=0.25, linestyle='none')
 
 # decorate
 ax.set_xlabel('number of events')
@@ -131,8 +159,11 @@ elif opts.mode=='gaussian':
 #    ax.plot(ax.get_xlim(), [opts.size*opts.gaussian_std]*2, 'k--')
     pass ### I don't understand the scaling here, so it's not clear how to predict it...
 
+elif opts.mode=='vonmises':
+    pass ### don't understand what's going on here either...
+
 else:
-    raise ValueError('--mode=%s not understood'%opts.mode)
+    pass ### just skip it...
 
 ymin, ymax = ax.get_ylim()
 ax.set_ylim(ymin=ymin/1.1, ymax=ymax*1.1)
