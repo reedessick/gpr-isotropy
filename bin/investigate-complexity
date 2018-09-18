@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 
 __usage__ = "investigate-complexity [--options]"
 __doc__ = """\
@@ -27,21 +27,37 @@ DEFAULT_NEVENT_RANGE = (1, 1000, 10)
 DEFAULT_NTRIALS = 100
 
 DEFAULT_STD = 1e-1
+DEFAULT_VAR = DEFAULT_STD**2
+
+#-------------------------------------------------
 
 def draw_random(size):
+    x = np.linspace(0, 1, size+1)
     p = np.random.rand(size)
-    return p/np.sum(p)
+    return x[:-1], p[:-1]/np.sum(p)
 
-def draw_gauss(size, std=DEFAULT_STD):
-    p = np.exp(-0.5*(np.linspace(0,1,size)-np.random.rand())**2/std**2)/(2*np.pi*std**2)**0.5
-    return p/np.sum(p)
+def draw_gauss(size, var=DEFAULT_VAR):
+    x = np.linspace(0, 1, size)
+    p = np.exp(-0.5*(x-np.random.rand())**2/var)/(2*np.pi*var)**0.5
+    return x, p/np.sum(p)
 
-def draw_vonmises(size, std=DEFAULT_STD):
-    p = vonmises.pdf(np.linspace(-np.pi,np.pi,size), kappa=1./std**2, loc=(np.random.rand()-0.5)*np.pi)
-    return p/np.sum(p)
+def draw_vonmises(size, var=DEFAULT_VAR):
+    x = np.linspace(-np.pi, np.pi, size+1)
 
-def draw_beta(size, **kwargs):
-    raise NotImplementedError
+    p = vonmises.pdf(x, kappa=1./var, loc=(np.random.rand()-0.5)*2*np.pi)
+    return x[:-1], p[:-1]*(x[1]-x[0])
+
+def draw_beta(size, var=DEFAULT_VAR):
+    x = np.linspace(0, 1, size+2)[1:-1] ### we skip the boundaries because of the beta distribution's domain
+
+    m = np.random.rand() ### get the mean
+    max_var = m*(1-m)
+
+    a = m*(max_var - var)/var if var < max_var else 1e-6 ### something really tiny, approximate the limit alpha -> 0
+    b = (1-m)/m * a
+
+    p = beta.pdf(x, a, b)
+    return x, p*(x[1]-x[0])
 
 def draw_skymap(size, **kwargs):
     raise NotImplementedError
@@ -51,7 +67,7 @@ MODES = {
     'gaussian':draw_gauss,
     'vonmises':draw_vonmises,
     'beta':draw_beta,
-    'skymap':draw_skymap,
+#    'skymap':draw_skymap,
 }
 KNOWN_MODES = MODES.keys()
 DEFAULT_MODE = KNOWN_MODES[0]
@@ -77,9 +93,14 @@ DEFAULT=%d'%DEFAULT_NTRIALS)
 parser.add_option('--mode', default=DEFAULT_MODE, type='string', 
     help='must be one of %s. \
 DEFAULT=%s'%(', '.join(KNOWN_MODES), DEFAULT_MODE))
-parser.add_option('--gaussian-std', default=DEFAULT_STD, type='float',
-    help='standard deviation of Gaussian used iff --mode=gaussian. \
+parser.add_option('--std', default=DEFAULT_STD, type='float',
+    help='standard deviation of the single-event distributions. \
 DEFAULT=%.3f'%DEFAULT_STD)
+
+parser.add_option('-p', '--plot-single-events', dest='plot', default=False, action='store_true',
+    help='plot the single event "posteriors" for each trial')
+parser.add_option('-e', '--eigvals', default=False, action='store_true',
+    help='plot the distribution of eigenvalues for each trial')
 
 parser.add_option('-o', '--output-dir', default='.', type='string')
 parser.add_option('-t', '--tag', default='', type='string')
@@ -104,10 +125,13 @@ if opts.mode=='random':
     args = (opts.size,)
 
 elif opts.mode=='gaussian':
-    args = (opts.size, opts.gaussian_std)
+    args = (opts.size, opts.std**2)
 
 elif opts.mode=='vonmises':
-    args = (opts.size, opts.gaussian_std)
+    args = (opts.size, (2*np.pi*opts.std)**2) ### scale this so it is a fraction of the functions domain like what happens for everything else
+
+elif opts.mode=='beta':
+    args = (opts.size, opts.std**2)
 
 else:
     raise ValueError('--mode=%s not understood'%opts.mode)
@@ -122,19 +146,54 @@ for nevent in xrange(*opts.Nevent_range):
     if opts.verbose:
         print('simulating %d events'%nevent)
 
+    if opts.eigvals:
+        e_fig = plt.figure()
+        e_ax = e_fig.gca()
+
     ranks = []
     for trial in xrange(opts.Ntrials):
         if opts.Verbose:
             print('    trial %d / %d'%(trial, opts.Ntrials))
 
+        if opts.plot:
+            p_fig = plt.figure()
+            p_ax = p_fig.gca()
+
         fish[...] = 0.
         for event in xrange(nevent):
-            p = draw(*args)
+            x, p = draw(*args)
             fish += np.outer(p, p)
+
+            if opts.plot:
+                p_ax.plot(x, p, alpha=0.5)
+                p_ax.set_xlim(min(x), max(x))
+
+        if opts.eigvals:
+            e_ax.hist(np.log10(np.abs(np.linalg.eigvals(fish))), bins=1001, histtype='step', cumulative=-1, label='trial %d'%trial) ### only keep the absolute magnitude...
 
         ranks.append(np.linalg.matrix_rank(fish))
 
+        if opts.plot:
+            p_ax.set_xlabel('x')
+            p_ax.set_ylabel('p(x)')
+            p_ax.grid(True, which='both')
+            figname = '%s/investigate-complexity%s-distribs-size%d-nevent%d-trial%d.png'%(opts.output_dir, opts.tag, opts.size, nevent, trial)
+            if opts.Verbose:
+                print('    saving: '+figname)
+            p_fig.savefig(figname)
+            plt.close(p_fig)
+
     summary.append(ranks)
+
+    if opts.eigvals:
+        e_ax.set_xlabel('|eigval|')
+        e_ax.set_ylabel('cumulative count')
+        e_ax.grid(True, which='both')
+        figname = '%s/investigate-complexity%s-eigvals-size%d-nevent%d.png'%(opts.output_dir, opts.tag, opts.size, nevent)
+        if opts.Verbose:
+            print('saving: '+figname)
+        e_fig.savefig(figname)
+        plt.close(e_fig)
 
 ### print summary information about ranks and plot a figure
 if opts.verbose:
@@ -160,7 +219,10 @@ elif opts.mode=='gaussian':
     pass ### I don't understand the scaling here, so it's not clear how to predict it...
 
 elif opts.mode=='vonmises':
-    pass ### don't understand what's going on here either...
+    ax.plot(ax.get_xlim(), [opts.size]*2, 'k--') ### add line for the size of the array
+
+elif opts.mode=='beta':
+    ax.plot(ax.get_xlim(), [opts.size]*2, 'k--') ### add line for the size of the array
 
 else:
     pass ### just skip it...
