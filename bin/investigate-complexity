@@ -33,13 +33,13 @@ DEFAULT_VAR = DEFAULT_STD**2
 
 def draw_random(size):
     x = np.linspace(0, 1, size+1)
-    p = np.random.rand(size)
-    return x[:-1], p[:-1]/np.sum(p)
+    p = np.random.rand(size) # enforce periodic boundary conditions this way (x=0 <--> x=1)
+    return x[:-1], p*(x[1]-x[0])
 
 def draw_gauss(size, var=DEFAULT_VAR):
     x = np.linspace(0, 1, size)
     p = np.exp(-0.5*(x-np.random.rand())**2/var)/(2*np.pi*var)**0.5
-    return x, p/np.sum(p)
+    return x, p*(x[1]-x[0])
 
 def draw_vonmises(size, var=DEFAULT_VAR):
     x = np.linspace(-np.pi, np.pi, size+1)
@@ -174,7 +174,8 @@ for nevent in xrange(*opts.Nevent_range):
         abseigs.append(np.max(eigs))
         if opts.eigvals:
             eigs = eigs[eigs>0] ### keep only those that won't break my log10...
-            e_ax.hist(np.log10(eigs), bins=1001, histtype='step', cumulative=-1, label='trial %d'%trial) ### only keep the absolute magnitude...
+            ###        divide out expected scaling with the number of events
+            e_ax.hist(np.log10(eigs) - np.log10(nevent), bins=1001, histtype='step', cumulative=-1, label='trial %d'%trial)
 
         ranks.append(np.linalg.matrix_rank(fish))
 
@@ -192,7 +193,7 @@ for nevent in xrange(*opts.Nevent_range):
     maxeigs.append(abseigs)
 
     if opts.eigvals:
-        e_ax.set_xlabel('log10(|eigval|)')
+        e_ax.set_xlabel('log10(|eigval|/Nevent)')
         e_ax.set_ylabel('cumulative count')
         e_ax.grid(True, which='both')
         figname = '%s/investigate-complexity%s-eigvals-size%d-nevent%d.png'%(opts.output_dir, opts.tag, opts.size, nevent)
