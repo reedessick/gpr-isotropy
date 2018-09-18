@@ -186,7 +186,7 @@ for nevent in xrange(*opts.Nevent_range):
     summary.append(ranks)
 
     if opts.eigvals:
-        e_ax.set_xlabel('|eigval|')
+        e_ax.set_xlabel('log10(|eigval|)')
         e_ax.set_ylabel('cumulative count')
         e_ax.grid(True, which='both')
         figname = '%s/investigate-complexity%s-eigvals-size%d-nevent%d.png'%(opts.output_dir, opts.tag, opts.size, nevent)
