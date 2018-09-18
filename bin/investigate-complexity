@@ -116,6 +116,9 @@ parser.add_option('-i', '--ifo', default=[], type='string', action='append',
 parser.add_option('--gps-range', nargs=2, type='float', default=DEFAULT_GPS_RANGE, \
     help='the gps time range used when simulating skymaps. Only used if --mode=skymap. \
 DEFAULT=(%.3f, %.3f)'%DEFAULT_GPS_RANGE)
+parser.add_option('--nside', type='int', default=DEFAULT_NSIDE,
+    help='the nside used when computing the skymap before downsampling to --size. \
+DEFAULT=%d'%DEFAULT_NSIDE)
 
 parser.add_option('-p', '--plot-single-events', dest='plot', default=False, action='store_true',
     help='plot the single event "posteriors" for each trial')
@@ -158,7 +161,7 @@ elif opts.mode=='skymap':
         raise ValueError('please supply at least one detector with --ifo when using --mode=skymap')
     detectors = [detector_cache.detectors[ifo] for ifo in opts.ifo]
     start, end = opts.gps_range
-    args = (opts.size, start, end, detectors, opts.std)
+    args = (opts.size, start, end, detectors, opts.std, opts.nside)
 
 else:
     raise ValueError('--mode=%s not understood'%opts.mode)
