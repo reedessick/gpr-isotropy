@@ -20,6 +20,9 @@ import matplotlib
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 
+### skymap stuff from exposure
+import simUtils as exposure_simutils
+
 #-------------------------------------------------
 
 DEFAULT_SIZE = 50
@@ -59,8 +62,11 @@ def draw_beta(size, var=DEFAULT_VAR):
     p = beta.pdf(x, a, b)
     return x, p*(x[1]-x[0])
 
-def draw_skymap(size, **kwargs):
-    raise NotImplementedError
+def draw_skymap(size, start, stop, detectors):
+    skymap = exposure_simutils.simulate_cel_skymaps(start, stop, detectors, size=1, nside=size)
+    return np.arange(len(skymap)), skymap
+
+#------------------------
 
 MODES = {
     'random':draw_random,
