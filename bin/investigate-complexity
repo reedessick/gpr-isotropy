@@ -142,6 +142,7 @@ else:
 fish = np.zeros((opts.size, opts.size), dtype=float) ### allocate memory for the big array
 
 summary = []
+maxeigs = []
 for nevent in xrange(*opts.Nevent_range):
     if opts.verbose:
         print('simulating %d events'%nevent)
@@ -151,6 +152,7 @@ for nevent in xrange(*opts.Nevent_range):
         e_ax = e_fig.gca()
 
     ranks = []
+    abseigs = []
     for trial in xrange(opts.Ntrials):
         if opts.Verbose:
             print('    trial %d / %d'%(trial, opts.Ntrials))
@@ -168,8 +170,11 @@ for nevent in xrange(*opts.Nevent_range):
                 p_ax.plot(x, p, alpha=0.5)
                 p_ax.set_xlim(min(x), max(x))
 
+        eigs = np.abs(np.linalg.eigvals(fish))
+        abseigs.append(np.max(eigs))
         if opts.eigvals:
-            e_ax.hist(np.log10(np.abs(np.linalg.eigvals(fish))), bins=1001, histtype='step', cumulative=-1, label='trial %d'%trial) ### only keep the absolute magnitude...
+            eigs = eigs[eigs>0] ### keep only those that won't break my log10...
+            e_ax.hist(np.log10(eigs), bins=1001, histtype='step', cumulative=-1, label='trial %d'%trial) ### only keep the absolute magnitude...
 
         ranks.append(np.linalg.matrix_rank(fish))
 
@@ -184,6 +189,7 @@ for nevent in xrange(*opts.Nevent_range):
             plt.close(p_fig)
 
     summary.append(ranks)
+    maxeigs.append(abseigs)
 
     if opts.eigvals:
         e_ax.set_xlabel('log10(|eigval|)')
@@ -199,6 +205,9 @@ for nevent in xrange(*opts.Nevent_range):
 if opts.verbose:
     print('plotting')
 
+#------------------------
+
+#--- scaling of "rank"
 fig = plt.figure()
 ax = fig.gca()
 
@@ -231,7 +240,29 @@ ymin, ymax = ax.get_ylim()
 ax.set_ylim(ymin=ymin/1.1, ymax=ymax*1.1)
 
 # save
-figname = '%s/investigate-complexity%s.png'%(opts.output_dir, opts.tag)
+figname = '%s/investigate-complexity-rank%s.png'%(opts.output_dir, opts.tag)
+if opts.verbose:
+    print('saving: '+figname)
+fig.savefig(figname)
+plt.close(fig)
+
+
+#------------------------
+
+#--- scaling of maximum eigenvalues
+fig = plt.figure()
+ax = fig.gca()
+
+ax.boxplot(maxeigs, positions=range(*opts.Nevent_range))
+for ranks, x in zip(summary, range(*opts.Nevent_range)):
+    ax.plot([x]*len(ranks), ranks, marker='o', markersize=4, markeredgecolor='k', markerfacecolor='none', alpha=0.25, linestyle='none')
+
+# decorate
+ax.set_xlabel('number of events')
+ax.set_ylabel('max{|eigval|}')
+
+# save
+figname = '%s/investigate-complexity-maxeig%s.png'%(opts.output_dir, opts.tag)
 if opts.verbose:
     print('saving: '+figname)
 fig.savefig(figname)
