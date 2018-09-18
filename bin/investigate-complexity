@@ -254,8 +254,8 @@ fig = plt.figure()
 ax = fig.gca()
 
 ax.boxplot(maxeigs, positions=range(*opts.Nevent_range))
-for ranks, x in zip(summary, range(*opts.Nevent_range)):
-    ax.plot([x]*len(ranks), ranks, marker='o', markersize=4, markeredgecolor='k', markerfacecolor='none', alpha=0.25, linestyle='none')
+for eigs, x in zip(maxeigs, range(*opts.Nevent_range)):
+    ax.plot([x]*len(eigs), eigs, marker='o', markersize=4, markeredgecolor='k', markerfacecolor='none', alpha=0.25, linestyle='none')
 
 # decorate
 ax.set_xlabel('number of events')
