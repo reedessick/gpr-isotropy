@@ -22,6 +22,8 @@ from matplotlib import pyplot as plt
 
 ### skymap stuff from exposure
 import simUtils as exposure_simutils
+import detector_cache
+import stats as skymap_stats
 
 #-------------------------------------------------
 
@@ -31,6 +33,9 @@ DEFAULT_NTRIALS = 100
 
 DEFAULT_STD = 1e-1
 DEFAULT_VAR = DEFAULT_STD**2
+
+DEFAULT_GPS_RANGE = (1125100817, 1127692817) ### Sept 1 - Oct 1, 2015
+DEFAULT_NSIDE = 128
 
 #-------------------------------------------------
 
@@ -62,8 +67,12 @@ def draw_beta(size, var=DEFAULT_VAR):
     p = beta.pdf(x, a, b)
     return x, p*(x[1]-x[0])
 
-def draw_skymap(size, start, stop, detectors):
-    skymap = exposure_simutils.simulate_cel_skymaps(start, stop, detectors, size=1, nside=size)
+def draw_skymap(size, start, stop, detectors, std=DEFAULT_STD, nside=DEFAULT_NSIDE):
+    skymap = exposure_simutils.simulate_cel_skymaps(start, stop, detectors, size=1, nside=nside, time_error=std)
+    skymap = skymap[0][1] ### extract the array from the function call
+
+    skymap = skymap_stats.resample(skymap, hp.npix2nside(size)) ### downsample while preserving the L1 norm
+
     return np.arange(len(skymap)), skymap
 
 #------------------------
@@ -73,7 +82,7 @@ MODES = {
     'gaussian':draw_gauss,
     'vonmises':draw_vonmises,
     'beta':draw_beta,
-#    'skymap':draw_skymap,
+    'skymap':draw_skymap,
 }
 KNOWN_MODES = MODES.keys()
 DEFAULT_MODE = KNOWN_MODES[0]
@@ -102,6 +111,11 @@ DEFAULT=%s'%(', '.join(KNOWN_MODES), DEFAULT_MODE))
 parser.add_option('--std', default=DEFAULT_STD, type='float',
     help='standard deviation of the single-event distributions. \
 DEFAULT=%.3f'%DEFAULT_STD)
+parser.add_option('-i', '--ifo', default=[], type='string', action='append',
+    help='can be repeated; only used if --mode=skymap')
+parser.add_option('--gps-range', nargs=2, type='float', default=DEFAULT_GPS_RANGE, \
+    help='the gps time range used when simulating skymaps. Only used if --mode=skymap. \
+DEFAULT=(%.3f, %.3f)'%DEFAULT_GPS_RANGE)
 
 parser.add_option('-p', '--plot-single-events', dest='plot', default=False, action='store_true',
     help='plot the single event "posteriors" for each trial')
@@ -138,6 +152,13 @@ elif opts.mode=='vonmises':
 
 elif opts.mode=='beta':
     args = (opts.size, opts.std**2)
+
+elif opts.mode=='skymap':
+    if not opts.ifo:
+        raise ValueError('please supply at least one detector with --ifo when using --mode=skymap')
+    detectors = [detector_cache.detectors[ifo] for ifo in opts.ifo]
+    start, end = opts.gps_range
+    args = (opts.size, start, end, detectors, opts.std)
 
 else:
     raise ValueError('--mode=%s not understood'%opts.mode)
@@ -201,6 +222,7 @@ for nevent in xrange(*opts.Nevent_range):
     if opts.eigvals:
         e_ax.set_xlabel('log10(|eigval|/Nevent)')
         e_ax.set_ylabel('cumulative count')
+        e_ax.set_ylim(ymin=0, ymax=opts.size)
         e_ax.grid(True, which='both')
         figname = '%s/investigate-complexity%s-eigvals-size%d-nevent%d.png'%(opts.output_dir, opts.tag, opts.size, nevent)
         if opts.Verbose:
@@ -252,7 +274,6 @@ if opts.verbose:
     print('saving: '+figname)
 fig.savefig(figname)
 plt.close(fig)
-
 
 #------------------------
 
