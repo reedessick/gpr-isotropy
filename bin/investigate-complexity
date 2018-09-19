@@ -219,13 +219,14 @@ for nevent in xrange(*opts.Nevent_range):
         if opts.eigvals:
             eigs = eigs[eigs>0] ### keep only those that won't break my log10...
             ###        divide out expected scaling with the number of events
-            e_ax.hist(np.log10(eigs) - np.log10(nevent), bins=1001, histtype='step', cumulative=-1, label='trial %d'%trial)
+            color = e_ax.hist(np.log10(eigs) - np.log10(nevent), bins=1001, histtype='step', cumulative=-1, label='trial %d'%trial)[2][0].get_edgecolor()
+            e_ax.plot([np.log10(np.max(eigs)) - np.log10(nevent)]*2, [0, opts.size], color=color, alpha=0.5, linestyle='dashed')
 
         ranks.append(np.linalg.matrix_rank(fish))
 
         if opts.plot:
             if opts.mode=='skymap':
-                mollweide.heatmap(bigp, p_ax)
+                mollweide.heatmap(bigp, p_ax, colorbar=True, colorbar_label='sum of posteriors')
             else:
                 p_ax.set_xlabel('x')
                 p_ax.set_ylabel('p(x)')
