@@ -8,10 +8,6 @@ import numpy as np
 
 #-------------------------------------------------
 
-TWOPI = 2*np.pi
-
-#-------------------------------------------------
-
 class Likelihood(object):
     """
     general class representing a likelihood

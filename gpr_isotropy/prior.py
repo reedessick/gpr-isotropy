@@ -6,10 +6,8 @@ __author__ = "reed.essick@ligo.org"
 import numpy as np
 import healpy as hp
 
-#-------------------------------------------------
-
-TWOPI = 2*np.pi
-LOG2PI = np.log(TWOPI)
+### non-standard libraries
+from gpr_isotropy.utils import (TWOPI, LOG2PI)
 
 #-------------------------------------------------
 
@@ -17,9 +15,12 @@ class Prior(object):
     """
     general class representing a prior
     """
-    def __init__(self, nside):
+    _allowed_params = sorted([])
+
+    def __init__(self, nside, **params):
         self._nside = nside
         self._npix = hp.nside2npix(nside)
+        self.params = params ### automatically checks that these are the correct params
 
     @property
     def nside(self):
@@ -28,6 +29,15 @@ class Prior(object):
     @property
     def npix(self):
         return self._npix
+
+    @property
+    def params(self):
+        return self._params
+
+    @params.setter
+    def params(self, new_params):
+        assert sorted(new_params.keys())==sorted(self._allowed_params), 'new parameters do not match allowed_params=%s'%(' '.join(self._allowed_params))
+        self._params = new_params
 
     def __call__(self, *args):
         return 0. 
@@ -54,22 +64,24 @@ class LogNorm(Prior):
         var is a float, int
     in which case it applies the same prior to all directions
     """
-    def __init__(self, nside, mean, var):
-        Prior.__init__(self, nside)
 
+    _allowed_params = sorted(['mean', 'var'])
+
+    def __init__(self, nside, **params):
+        Prior.__init__(self, nside, **params)
+
+        mean = self.params['mean']
+        var = self.params['var']
         assert len(mean)==self._npix or isinstance(mean, (float, int)), 'bad shape for mean'
-        self._mean = mean
 
         if isinstance(var, (float, int)):
-            self._var = var
             self._norm = 0.5*N*np.log(twopi) - 0.5*self._npix*np.log(var)
         else:
             assert len(var)==self._npix, 'bad shape for var'
-            self._var = var
             self._norm = 0.5*N*np.log(twopi) - 0.5*np.sum(np.log(var))
 
     def __call__(self, Ro):
-        return np.sum( - 0.5*(np.log(Ro)-self._mean)/self._var ) - self._norm
+        return np.sum( - 0.5*(np.log(Ro)-self.params['mean'])/self.params['var'] ) - self._norm
 
 #---
 
@@ -109,7 +121,7 @@ class Kernel(object):
 
     def _compute(self):
         self._cov = np.diag(np.ones(self._npix, dtype=float))
-        self._icov = np.diag(np.ones(self._npix, dtype=float))
+        self._icov = np.diag(np.ones(self._npix, dtype=float)) ### we don't use self._compute_icov or self._compute_logdet_cov because this is so easy
         self._logdet_cov = 0.
 
     @property
@@ -134,16 +146,56 @@ class Kernel(object):
         """
         return -0.5*np.sum(eps*np.sum(self._icov*eps, axis=1)) - 0.5*(self._npix*LOG2PI - self._logdet_cov)
 
+    def __add__(self, other):
+        """
+        add the covariances and then re-compute internals
+        returns a new object
+        """
+        self._is_safe_to_add(other)
+
+        ### make a new object and return it
+        new = Kernel(self.nside)      
+        new._cov = self._cov + other._cov
+        new._compute_icov()
+        new._compute_logdet_cov()
+
+        return new
+        
+    def __iadd__(self, other):
+        """
+        add covariances and then re-compute internals
+        modifies this object in place
+        """
+        self._is_safe_to_add(other)
+
+        ### modify things in place
+        self._cov += other._cov
+        self._compute_icov()
+        self._compute_logdet_cov()
+
+        return self
+
+    def _is_safe_to_add(self, other):
+        assert self.nside==other.nside, 'can only add kernels with the same nside!'
+
+    def _compute_icov(self):
+        self._icov = np.linalg.inv(self._cov) ### could be fragile
+
+    def _compute_logdet_cov(self):
+        s, self._logdet_cov = np.slogdet(self._cov)
+        assert s>0, 'unphysical covariance matrix! sign of the determinant is not positive'
+
 class WhiteKernel(Kernel):
     """
     a white kernel with specifiable variance
     """
-    _allowed_params = ['s']
+    _allowed_params = ['w']
 
     def _compute(self):
-        self._cov = np.diag(np.one(self._npix, dtype=float))*self.params['s']**2
-        self._icov = np.diag(np.ones(self._npix, dtype=float))/self.params['s']**2
-        self._logdet_cov = self._npix*2*np.log(self.params['s'])
+        w = self.params['w']
+        self._cov = np.diag(np.one(self._npix, dtype=float))*w**2
+        self._icov = np.diag(np.ones(self._npix, dtype=float))/w**2 ### we don't use self._compute_* here because this is so easy
+        self._logdet_cov = self._npix*2*np.log(self.params['w'])
 
 class SqrExpKernel(Kernel):
     """
@@ -161,6 +213,5 @@ class SqrExpKernel(Kernel):
 
         ### evaluate covariance
         self._cov = self.params['s']**2 * np.exp(-0.5*self._cov/self.params['l'])**2
-        self._icov = np.linalg.inv(self._cov) ### NOTE: could be fragile...
-        s, self._logdet_cov = np.slogdet(self._cov)
-        assert s>0, 'unphysical covariance matrix! sign of the determinant is not positive'
+        self._compute_icov()
+        self._compute_logdet_cov()

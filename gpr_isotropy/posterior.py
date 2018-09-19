@@ -8,10 +8,7 @@ import numpy as np
 
 ### non-standard libraries
 from gpr_isotropy import likelihood
-
-#-------------------------------------------------
-
-DEFAULT_NUM_SAMPLES = 1000
+from gpr_isotropy.utils import DEFAULT_NUM_SAMPLES
 
 #-------------------------------------------------
 
@@ -67,22 +64,22 @@ class Ro(Posterior):
     def __call__(self, Ro):
         return self.likelihood(Ro, self._kernel) + self._rprior(Ro)
 
-class Eps(Ro_Eps):
-    """
-    log prob(eps|maps, exposure, kernel, Rprior)
-
-    importance sampling to marginalize over Ro
-    if Ro_samples is not supplied, we'll sample some from loglike_Ro
-    """
-    _likelihood_function = likelihood.Eps
-
-    def __init__(self, maps, exposure, kernel, rprior, num_samples=DEFAULT_NUM_SAMPLES):
-        Posterior.__init__(self, *args)
-        self.sample(num_samples=num_samples)
-
-    def sample(self, num_samples=DEFAULT_NUM_SAMPLES):
-        self._rsamples = []
-        raise NotImplementedError('sample from p(Ro|...) to get Ro samples used in numerical marginaliation in __call__')
-
-    def __call__(self, eps):
-        return self._likelihood(eps, Ro_samples) + self._kernel(eps)
+#class Eps(Ro_Eps):
+#    """
+#    log prob(eps|maps, exposure, kernel, Rprior)
+#
+#    importance sampling to marginalize over Ro
+#    if Ro_samples is not supplied, we'll sample some from loglike_Ro
+#    """
+#    _likelihood_function = likelihood.Eps
+#
+#    def __init__(self, maps, exposure, kernel, rprior, num_samples=DEFAULT_NUM_SAMPLES):
+#        Posterior.__init__(self, *args)
+#        self.sample(num_samples=num_samples)
+#
+#    def sample(self, num_samples=DEFAULT_NUM_SAMPLES):
+#        self._rsamples = []
+#        raise NotImplementedError('sample from p(Ro|...) to get Ro samples used in numerical marginaliation in __call__')
+#
+#    def __call__(self, eps):
+#        return self._likelihood(eps, Ro_samples) + self._kernel(eps)
