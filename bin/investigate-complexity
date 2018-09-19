@@ -22,8 +22,10 @@ from matplotlib import pyplot as plt
 
 ### skymap stuff from exposure
 import simUtils as exposure_simutils
+
 import detector_cache
 import stats as skymap_stats
+from plotting import mollweide
 
 #-------------------------------------------------
 
@@ -113,6 +115,7 @@ parser.add_option('--std', default=DEFAULT_STD, type='float',
 DEFAULT=%.3f'%DEFAULT_STD)
 parser.add_option('-i', '--ifo', default=[], type='string', action='append',
     help='can be repeated; only used if --mode=skymap')
+
 parser.add_option('--gps-range', nargs=2, type='float', default=DEFAULT_GPS_RANGE, \
     help='the gps time range used when simulating skymaps. Only used if --mode=skymap. \
 DEFAULT=(%.3f, %.3f)'%DEFAULT_GPS_RANGE)
@@ -166,6 +169,8 @@ elif opts.mode=='skymap':
 else:
     raise ValueError('--mode=%s not understood'%opts.mode)
 
+figind = 0 ### a counter that we use when creating plots. Don't worry about it
+
 #-------------------------------------------------
 
 ### stack simulations and compute ranks
@@ -178,7 +183,8 @@ for nevent in xrange(*opts.Nevent_range):
         print('simulating %d events'%nevent)
 
     if opts.eigvals:
-        e_fig = plt.figure()
+        figind += 1
+        e_fig = plt.figure(figind)
         e_ax = e_fig.gca()
 
     ranks = []
@@ -188,8 +194,13 @@ for nevent in xrange(*opts.Nevent_range):
             print('    trial %d / %d'%(trial, opts.Ntrials))
 
         if opts.plot:
-            p_fig = plt.figure()
-            p_ax = p_fig.gca()
+            figind += 1
+            if opts.mode == 'skymap':
+                p_fig, p_ax = mollweide.gen_fig_ax(figind, projection='astro mollweide')
+                bigp = np.zeros(opts.size)
+            else:
+                p_fig = plt.figure(figind)
+                p_ax = p_fig.gca()
 
         fish[...] = 0.
         for event in xrange(nevent):
@@ -197,8 +208,11 @@ for nevent in xrange(*opts.Nevent_range):
             fish += np.outer(p, p)
 
             if opts.plot:
-                p_ax.plot(x, p, alpha=0.5)
-                p_ax.set_xlim(min(x), max(x))
+                if opts.mode == 'skymap':
+                    bigp += p
+                else:
+                    p_ax.plot(x, p, alpha=0.5)
+                    p_ax.set_xlim(min(x), max(x))
 
         eigs = np.abs(np.linalg.eigvals(fish))
         abseigs.append(np.max(eigs))
@@ -210,8 +224,12 @@ for nevent in xrange(*opts.Nevent_range):
         ranks.append(np.linalg.matrix_rank(fish))
 
         if opts.plot:
-            p_ax.set_xlabel('x')
-            p_ax.set_ylabel('p(x)')
+            if opts.mode=='skymap':
+                mollweide.heatmap(bigp, p_ax)
+            else:
+                p_ax.set_xlabel('x')
+                p_ax.set_ylabel('p(x)')
+
             p_ax.grid(True, which='both')
             figname = '%s/investigate-complexity%s-distribs-size%d-nevent%d-trial%d.png'%(opts.output_dir, opts.tag, opts.size, nevent, trial)
             if opts.Verbose:
