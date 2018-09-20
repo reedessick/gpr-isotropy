@@ -19,12 +19,21 @@ from gpr_isotropy import likelihood
 
 #-------------------------------------------------
 
-def into_hdf5(h5py_file, count, result, ro, ro_eps, rmodel):
+def into_hdf5(
+        h5py_file,
+        count,
+        pos,
+        lnprob,
+        rstate,
+        rmodel,
+        ro,
+        ro_eps,
+    )
     raise NotImplementedError
 
 def from_hdf5(h5py_file, count=-1):
     """
-    return count, state
+    return count, state, lnprob, rstate
     """
     raise NotImplementedError
 
@@ -290,7 +299,7 @@ class Sampler(object):
             if verbose:
                 print('loading initial state from last sample in: '+path)
             with h5py.File(path, 'r') as h5py_file:
-                self.count, self.state = from_hdf5(h5py_file)
+                self.count, self.state, _, _ = from_hdf5(h5py_file)
 
     def sample(self, num_samples, verbose=False, path=None):
         """
@@ -306,16 +315,25 @@ class Sampler(object):
                     print('checkpointing to: '+path)
                 h5py_file = h5py.File(path, 'w')
 
-            for i, result in enumerate(self.sampler.sample(self.state, iterations=num_samples)):
+            for i, (state, lnprob, rstate) in enumerate(self.sampler.sample(self.state, iterations=num_samples)):
                 if verbose:
                     n = int((self._PROGRESSBAR_WIDTH+1) * float(i) / num_samples)
                     sys.stdout.write("\r[{0}{1}]".format('#' * n, ' ' * (self._PROGRESSBAR_WIDTH - n)))
                     sys.stdout.flush()
 
                 if checkpoint:
-                    into_hdf5(h5py_file, self._count, result, self._ro, self._ro_eps, self._rmodel)
+                    into_hdf5(
+                        h5py_file,
+                        self._count,
+                        state,
+                        lnprob,
+                        rstate,
+                        self._rmodel,
+                        self._ro,
+                        self._ro_eps,
+                    )
 
-                self._state = result[0]
+                self._state = state
                 self._count += 1
 
         finally:
