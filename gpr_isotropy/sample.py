@@ -21,6 +21,9 @@ def into_hdf5(h5py_file, count, result, ro, ro_eps, rmodel):
     raise NotImplementedError
 
 def from_hdf5(h5py_file, count=-1):
+    """
+    return count, state
+    """
     raise NotImplementedError
 
 #-------------------------------------------------
@@ -234,7 +237,7 @@ class Sampler(object):
             if verbose:
                 print('loading initial state from last sample in: '+path)
             with h5py.File(path, 'r') as h5py_file:
-                self.state = from_hdf5(h5py_file)
+                self.count, self.state = from_hdf5(h5py_file)
 
     def sample(self, num_samples, verbose=False, path=None):
         """
