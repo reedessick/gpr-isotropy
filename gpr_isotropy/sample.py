@@ -9,6 +9,8 @@ import h5py
 import emcee
 
 import healpy as hp
+import numpy as np
+from scipy.stats import gamma ### used to initialize RoModels
 
 ### non-standard libraries
 from gpr_isotropy.utils import (DEFAULT_NUM_SAMPLES, DEFAULT_NUM_WALKERS, DEFAULT_NUM_THREADS)
@@ -58,6 +60,12 @@ class RoModel(object):
     def __call__(self, params):
         raise NotImplementedError('child class should overwrite this')
 
+    def initialize(self, maps, exposure, nwalkers=DEFAULT_NUM_WALKERS):
+        """
+        come up with a reasonable starting point based on maps, exposure
+        """
+        raise NotImplementedError('child class should overwrite this')
+
 class IsoRoModel(RoModel):
     """
     an Ro model that is just a uniform isotropic distribution
@@ -71,7 +79,12 @@ class IsoRoModel(RoModel):
         return 1
 
     def __call__(self, r):
-        return self._ones*r       
+        return self._ones*r
+
+    def initialize(self, maps, exposure, nwalkers=DEFAULT_NUM_WALKERS):
+        state = gamma.rvs(len(maps)+1, size=nwalkers) ### distrib for "average number of signals" based on data
+        state /= np.sum(exposure) ### turn this into a rate based on exposure
+        return state.reshape((nwalkers, self.ndim))
 
 class PixRoModel(RoModel):
     """
@@ -86,18 +99,55 @@ class PixRoModel(RoModel):
     def __call__(self, ro_pix):
         return hp.ud_grade(ro_pix, self.nside, power=-2) ### convert to the appropriate nside model
 
+    def initialize(self, maps, exposure, nwalkers=DEFAULT_NUM_WALKERS):
+        ### resample maps, exposure to the nside for this RoModel
+        nside = self.params['ro_nside']
+        maps = np.sum(hp.ud_grade(m, nside, power=-2) for m in maps)
+        exposure = hp.ud_grade(exposure, nside, power=-2)
+
+        npix = hp.nside2npix(nside)
+        state = np.empty((nwalkers, npix), dtype=float)
+        for pix in xrange(npix):
+            state[:,i] = gamma.rvs(maps[i]+1, size=nwalkers)/exposure[i]
+        return state
+
 class YlmRoModel(RoModel):
     """
     an Ro model that deals with spherical harmonics
+
+    NOTE: we impose reality constraints so that a_{l,m} = conjugate(a_{l,-m}) for all l, m
     """
     _allowed_params = ['ro_nside']
 
     @property
     def ndim(self):
-        return hp.nside2npix(self.params['ro_nside'])
+        raise NotImplementedError
+#        return hp.nside2npix(self.params['ro_nside'])
 
     def __call__(self, ro_alm):
         raise NotImplementedError('convert alm to pixel basis')
+
+    def initialize(self, maps, exposure, nwalkers=DEFAULT_NUM_WALKERS):
+        raise NotImplementedError
+
+class ExpYlmRoModel(RoModel):
+    """
+    an Ro model that deals with the exponent of spherical harmonics
+        Ro = exp(sum_{l,m} alm*Ylm)
+
+    NOTE: we impose reality constraints so that a_{l,m} = conjugate(a_{l,-m}) for all l, m
+    """
+    _allowed_params = ['ro_nside']
+
+    @property
+    def ndim(self):
+        raise NotImplementedError
+
+    def __call__(self, ro_alm):
+        raise NotImplementedError
+
+    def initialize(self, maps, exposure, nwalkers=DEFAULT_NUM_WALKERS):
+        raise NotImplementedError
 
 #-------------------------------------------------
 
@@ -232,7 +282,10 @@ class Sampler(object):
 
     def initialize(self, path=None, verbose=False):
         if path is None:
-            raise NotImplementedError('start around the MLE estimates from posterior (based on non-zero eigenvalues)')
+            if verbose:
+                print('initializing state with rmodel based on maps, exposure')
+            self.count = 0
+            self.state = self.rmodel.initialize(self.maps, self.exposure, nwalkers=self.nwalkers)
         else:
             if verbose:
                 print('loading initial state from last sample in: '+path)
