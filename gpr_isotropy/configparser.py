@@ -13,6 +13,7 @@ from gpr_isotropy import prior
 
 KERNEL_SECTION = 'kernel'
 RPRIOR_SECTION = 'rprior'
+RMODEL_SECTION = 'rmodel'
 SAMPLER_SECTION = 'sampler'
 
 #-------------------------------------------------
@@ -78,6 +79,28 @@ def config2rprior(config, nside, verbose=False):
 
 #------------------------
 
+def config2rmodel(config, nside, verbose=False):
+    '''
+    extracts the rmodel parametes similarly to kernel, but only allows for a single model instead of the sum over several
+    '''
+    items = config.items(RMODEL_SECTION)
+    assert len(items), ' could not find any rmodel specifications in [%s]'%RMODEL_SECTION
+    assert len(items)==1, 'cannot parse more than one rmodel specification in [%s]'%RMODEL_SECTION
+
+    rmodel, kwargs = items[0]
+    kwargs = eval(kwargs) ### could be fragile
+
+    if rmodel=='IsoRoModel':
+        return sample.IsoRoModel(nside, **kwargs)
+    elif rmodel=='PixRoModel':
+        return sample.PixRoModel(nside, **kwargs)
+    elif rmodel=='YlmRoModel':
+        return sample.YlmRoModel(nside, **kwargs)
+    else:
+        raise ValueError('%s not understood!'%rmodel)
+
+#------------------------
+
 def config2sampler(config, nside, maps, exposure, verbose=False):
     '''
     extracts the relevant settings from the config to build a sample.Sampler object
@@ -85,6 +108,7 @@ def config2sampler(config, nside, maps, exposure, verbose=False):
     ### instantiate priors
     kernel = config2kernel(config, nside, verbose=verbose)
     rprior = config2rprior(config, nside, verbose=verbose)
+    rmodel = config2rmodel(config, nside, verbose=verbose)
 
     if verbose:
         print('generating Posterior')
@@ -98,9 +122,4 @@ def config2sampler(config, nside, maps, exposure, verbose=False):
     if config.has_option('sampler', 'nwalkers'):
         kwargs['nwalkers'] = config.getint('sampler', 'nwalkers')
 
-    if config.has_option('sampler', 'ntemps'):
-        kwargs['ntemps'] = config.get('sampler', 'ntemps')
-    elif config.has_option('sampler', 'temp_ladder'):
-        kwargs['ntemps'] = [float(_) for _ in config.get('sampler', 'temp_ladder').split()]
-    
-    return sample.Sampler(nside, maps, exposure, kernel, rprior, **kwargs)
+    return sample.Sampler(nside, maps, exposure, kernel, rprior, rmodel, **kwargs)
