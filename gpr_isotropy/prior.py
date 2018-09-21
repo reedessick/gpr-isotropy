@@ -11,7 +11,7 @@ from gpr_isotropy.utils import (TWOPI, LOG2PI)
 
 #-------------------------------------------------
 
-class Prior(object):
+class RoPrior(object):
     """
     general class representing a prior
     """
@@ -46,14 +46,14 @@ class Prior(object):
 
 ### priors for Ro
 
-class PosSemiDef(Prior):
+class PosSemiDef(RoPrior):
     """
     require Ro to be positive semi-definite (each element must be >= 0)
     """
     def __call__(self, Ro):
         return 0. if np.all(Ro>=0) else -np.infty
 
-class LogNorm(Prior):
+class LogNorm(RoPrior):
     """
     log-normal prior for Ro, each direction separately
     assumes
@@ -68,7 +68,7 @@ class LogNorm(Prior):
     _allowed_params = sorted(['mean', 'var'])
 
     def __init__(self, nside, **params):
-        Prior.__init__(self, nside, **params)
+        RoPrior.__init__(self, nside, **params)
 
         mean = self.params['mean']
         var = self.params['var']
@@ -124,6 +124,13 @@ class Kernel(object):
         self._icov = np.diag(np.ones(self._npix, dtype=float)) ### we don't use self._compute_icov or self._compute_logdet_cov because this is so easy
         self._logdet_cov = 0.
 
+    def _compute_icov(self):
+        self._icov = np.linalg.inv(self._cov) ### could be fragile
+
+    def _compute_logdet_cov(self):
+        s, self._logdet_cov = np.slogdet(self._cov)
+        assert s>0, 'unphysical covariance matrix! sign of the determinant is not positive'
+
     @property
     def cov(self):
         return self._cov
@@ -177,13 +184,6 @@ class Kernel(object):
 
     def _is_safe_to_add(self, other):
         assert self.nside==other.nside, 'can only add kernels with the same nside!'
-
-    def _compute_icov(self):
-        self._icov = np.linalg.inv(self._cov) ### could be fragile
-
-    def _compute_logdet_cov(self):
-        s, self._logdet_cov = np.slogdet(self._cov)
-        assert s>0, 'unphysical covariance matrix! sign of the determinant is not positive'
 
 class WhiteKernel(Kernel):
     """

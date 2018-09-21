@@ -44,9 +44,15 @@ class Ro_Eps(Posterior):
 
     def eps_fisher(self, Ro):
         """
-        covariance for eps|Ro a posteriori (includes effect of kernel)
+        fisher information matrix for eps|Ro a posteriori (includes effect of kernel)
         """
         return self._likelihood.eps_fisher(Ro) + self._kernel._icov
+
+    def eps_cov(self, Ro):
+        """
+        covariance matrix for eps|Ro a posteriori (includes effect of kernel)
+        """
+        return np.linalg.inv(self.eps_fisher(Ro))
 
     def eps_mean(self, Ro):
         """

@@ -13,29 +13,12 @@ import numpy as np
 from scipy.stats import gamma ### used to initialize RoModels
 
 ### non-standard libraries
-from gpr_isotropy.utils import (DEFAULT_NUM_SAMPLES, DEFAULT_NUM_WALKERS, DEFAULT_NUM_THREADS)
+from gpr_isotropy import utils 
+DEFAULT_NUM_SAMPLES = utils.DEFAULT_NUM_SAMPLES
+DEFAULT_NUM_WALKERS = utils.DEFAULT_NUM_WALKERS
+DEFAULT_NUM_THREADS = utils.DEFAULT_NUM_THREADS
 from gpr_isotropy import posterior
 from gpr_isotropy import likelihood
-
-#-------------------------------------------------
-
-def into_hdf5(
-        h5py_file,
-        count,
-        pos,
-        lnprob,
-        rstate,
-        rmodel,
-        ro,
-        ro_eps,
-    )
-    raise NotImplementedError
-
-def from_hdf5(h5py_file, count=-1):
-    """
-    return count, state, lnprob, rstate
-    """
-    raise NotImplementedError
 
 #-------------------------------------------------
 
@@ -52,6 +35,10 @@ class RoModel(object):
     @property
     def nside(self):
         return self._nside
+
+    @property
+    def npix(self):
+        return hp.nside2npix(self._nside)
 
     @property
     def paramss(self):
@@ -299,7 +286,7 @@ class Sampler(object):
             if verbose:
                 print('loading initial state from last sample in: '+path)
             with h5py.File(path, 'r') as h5py_file:
-                self.count, self.state, _, _ = from_hdf5(h5py_file)
+                self.count, self.state, _, _ = utils.from_hdf5(h5py_file)
 
     def sample(self, num_samples, verbose=False, path=None):
         """
@@ -314,6 +301,7 @@ class Sampler(object):
                 if verbose:
                     print('checkpointing to: '+path)
                 h5py_file = h5py.File(path, 'w')
+                utils.init_hdf5(h5py_file, self.rmodel, self.rprior, self.kernel) ### record data about the sampler
 
             for i, (state, lnprob, rstate) in enumerate(self.sampler.sample(self.state, iterations=num_samples)):
                 if verbose:
@@ -322,7 +310,7 @@ class Sampler(object):
                     sys.stdout.flush()
 
                 if checkpoint:
-                    into_hdf5(
+                    utils.into_hdf5(
                         h5py_file,
                         self._count,
                         state,
